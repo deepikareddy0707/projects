@@ -1,0 +1,67 @@
+#Chat with PDF Using RAG Pipeline
+
+import os
+import PyPDF2
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.chains import RetrievalQA
+from langchain.llms import OpenAI
+
+# Step 1: Data Ingestion
+# Function to extract text from a PDF file
+def extract_text_from_pdf(file_path):
+    text = ""
+    with open(file_path, 'rb') as file:
+        reader = PyPDF2.PdfReader(file)
+        for page in reader.pages:
+            text += page.extract_text()
+    return text
+
+# Directory containing PDF files
+pdf_directory = "path_to_pdf_files"
+pdf_texts = []
+
+for file_name in os.listdir(pdf_directory):
+    if file_name.endswith(".pdf"):
+        pdf_path = os.path.join(pdf_directory, file_name)
+        pdf_texts.append(extract_text_from_pdf(pdf_path))
+
+# Step 2: Chunking and Embedding
+# Split text into chunks
+chunk_size = 500  # Number of characters per chunk
+chunks = []
+
+for text in pdf_texts:
+    for i in range(0, len(text), chunk_size):
+        chunks.append(text[i:i+chunk_size])
+
+# Generate vector embeddings for chunks
+embedding_model = OpenAIEmbeddings()
+vector_store = FAISS.from_texts(chunks, embedding_model)
+
+# Step 3: Query Handling
+# Initialize the Retrieval-Augmented Generation (RAG) pipeline
+retriever = vector_store.as_retriever()
+llm = OpenAI(temperature=0)
+qa_chain = RetrievalQA(llm=llm, retriever=retriever)
+
+# Step 4: User Query
+# Example query
+query = "What is the main topic discussed in the documents?"
+response = qa_chain.run(query)
+
+# Print the response
+print("Response:", response)
+
+# Step 5: Comparison Queries
+# Example comparison query
+def compare_fields(query_1, query_2):
+    response_1 = qa_chain.run(query_1)
+    response_2 = qa_chain.run(query_2)
+    return {
+        "Query 1": response_1,
+        "Query 2": response_2
+    }
+
+comparison = compare_fields("What is the revenue in Company A?", "What is the revenue in Company B?")
+print("Comparison:", comparison)
